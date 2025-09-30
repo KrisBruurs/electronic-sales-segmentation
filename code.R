@@ -62,6 +62,39 @@ customers_rfm_scaled <- customers_rfm %>%
 
 
 ###---Clustering---###
+set.seed(123)
 
+# Elbow method for optimal k
+fviz_nbclust(customers_rfm_scaled[, c("recency", "frequency", "monetary")], 
+             kmeans, 
+             method = "wss") +
+  labs(title = "Elbow Method for Optimal k")
 
-###---Output---###
+# Silhouette method for optimal k
+fviz_nbclust(customers_rfm_scaled[, c("recency", "frequency", "monetary")], 
+             kmeans, 
+             method = "silhouette") +
+  labs(title = "Silhouette Method for Optimal k")
+
+# Run k-means with k = 3
+km_res <- kmeans(customers_rfm_scaled[, c("recency", "frequency", "monetary")], 
+                 centers = 3, nstart = 25)
+
+# Add cluster labels back to your customers_rfm
+customers_rfm$cluster <- km_res$cluster
+
+# Get mean values of all clusters
+customers_rfm %>% 
+  group_by(cluster) %>% 
+  summarise(n = n(),
+            avg_frequency = mean(frequency),
+            avg_recency = mean(recency),
+            avg_monetary = mean(monetary))
+
+# Visualize clusters
+fviz_cluster(km_res, 
+             data = customers_rfm_scaled[, c("recency", "frequency", "monetary")],
+             geom = "point",
+             ellipse.type = "convex",
+             ggtheme = theme_minimal())
+
