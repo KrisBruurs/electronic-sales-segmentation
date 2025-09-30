@@ -1,0 +1,29 @@
+---
+title: "Customer Purchase Behavior Clustering"
+author: "Kris Bruurs"
+format: html
+editor: visual
+---
+
+# About this Document
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(skimr)
+library(cluster)
+library(factoextra)
+```
+
+# Input Data
+
+```{r}
+data <- read_csv('data/Electronic_sales_Sep2023-Sep2024.csv')
+```
+
+# Data Cleaning
+
+# RFM
+
+# Clustering
