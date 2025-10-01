@@ -7,23 +7,208 @@ editor: visual
 
 # About this Document
 
-# Libraries
+This document presents a customer segmentation analysis based on one year of electronic sales transactions. Using the **Recency–Frequency–Monetary (RFM) framework**, customers are grouped into distinct segments through **k-means clustering**. The objective is to uncover patterns in purchasing behavior that can inform personalized marketing strategies, customer retention programs, and overall business growth initiatives.
 
-```{r}
+The report covers the following steps:
+
+1.  Libraries
+
+2.  Input Data
+
+3.  Data Exploration
+
+4.  Data Cleaning
+
+5.  RFM
+
+6.  Clustering
+
+7.  Cluster Profiling and Business Recommendations
+
+The analysis highlights how companies can use transaction data to differentiate between loyal, at-risk, and dormant customers, ultimately supporting **data-driven decision-making in customer relationship management (CRM) and targeted marketing**.
+
+# 1. Libraries
+
+```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(skimr)
 library(cluster)
 library(factoextra)
 ```
 
-# Input Data
+# 2. Input Data
 
 ```{r}
 data <- read_csv('data/Electronic_sales_Sep2023-Sep2024.csv')
 ```
 
-# Data Cleaning
+# 3. Data Exploration
 
-# RFM
+Get an overview of available variables
 
-# Clustering
+```{r}
+glimpse(data)
+```
+
+Check number of individual customers
+
+```{r}
+n_distinct(data$`Customer ID`)
+```
+
+Get a descriptive overview of variables
+
+```{r}
+skim(data)
+```
+
+# 4. Data Cleaning
+
+Filter out cancelled orders and select variables that can later be used in a RFM dataframe
+
+```{r}
+data_cleaned <- data %>% 
+  filter(`Order Status` != 'Cancelled') %>% 
+  select(
+    `Customer ID`,
+    `Purchase Date`,
+    `Total Price`,
+  )
+```
+
+Check for distinct customers
+
+```{r}
+n_distinct(data_cleaned$`Customer ID`)
+```
+
+# 5. RFM
+
+Create a reference data and the RFM dataframe
+
+```{r}
+reference_date <- max(data_cleaned$`Purchase Date`)
+
+customers_rfm <- data_cleaned %>% 
+  group_by(`Customer ID`) %>% 
+  summarise(
+    recency = as.numeric(reference_date - max(`Purchase Date`)),
+    frequency = n(),
+    monetary = sum(`Total Price`)
+  )
+```
+
+Scale RFM dataframe
+
+```{r}
+customers_rfm_scaled <- customers_rfm %>% 
+  mutate(
+    across(c(recency, frequency, monetary), scale)
+  )
+```
+
+# 6. Clustering
+
+Set seed for reproducibility
+
+```{r}
+set.seed(123)
+```
+
+## Decide on Number of Clusters
+
+### Elbow Method
+
+```{r}
+fviz_nbclust(customers_rfm_scaled[, c("recency", "frequency", "monetary")], 
+             kmeans, 
+             method = "wss") +
+  labs(title = "Elbow Method for Optimal k")
+```
+
+### Silhouette Method
+
+```{r}
+fviz_nbclust(customers_rfm_scaled[, c("recency", "frequency", "monetary")], 
+             kmeans, 
+             method = "silhouette") +
+  labs(title = "Silhouette Method for Optimal k")
+```
+
+### Decision on Clusters
+
+The elbow method indicates that **k = 3** is a more suitable choice, while the silhouette method suggests **k = 2**. To avoid oversimplifying customer segments and to enable a more tailored marketing approach, we proceed with **k = 3 clusters**.
+
+## Run k-means
+
+```{r}
+km_res <- kmeans(customers_rfm_scaled[, c("recency", "frequency", "monetary")], 
+                 centers = 3, nstart = 25)
+
+customers_rfm$cluster <- km_res$cluster
+
+customers_rfm %>% 
+  group_by(cluster) %>% 
+  summarise(n = n(),
+            avg_frequency = round(mean(frequency),2),
+            avg_recency = round(mean(recency),2),
+            avg_monetary = round(mean(monetary),2))
+```
+
+## Visualize Clusters
+
+```{r}
+fviz_cluster(km_res, 
+             data = customers_rfm_scaled[, c("recency", "frequency", "monetary")],
+             geom = "point",
+             ellipse.type = "convex",
+             ggtheme = theme_minimal())
+```
+
+# 7. Cluster Profiling and Business Recommendations
+
+## Cluster Profiling
+
+After applying k-means clustering with **k = 3**, three distinct customer segments emerged. Each cluster was profiled based on average **Recency, Frequency, and Monetary (RFM)** values:
+
+-   **Cluster 1: Dormant Mid-Value Buyers**
+
+    -   Customers in this group make infrequent purchases (avg frequency \~ 1.2) and spend a moderate total amount (\~\$3200). Their average recency (\~80 days) suggests they are not fully disengaged, but they are at risk of becoming inactive.
+
+-    **Cluster 2: At-Risk or Lost Customers**
+
+    -   This segments shows the longest inactivity (avg recency \~243 days) and the lowest spend (\~\$2950). With an average frequency close to one purchase, these customers are largely one-time buyers who do not return for follow-up purchases.
+
+-   **Cluster 3: High-Value Loyal Customers**
+
+    -   The most profitable group, with the highest purchase frequency (\~2.4) and spending (\~\$9560). Recency is relatively low (\~86 days), indicating that these customers remain engaged. This cluster is the company's most valuable and loyal base.
+
+## Business Recommendations
+
+-   **Cluster 1: Dormant Mid-Value Buyers**
+
+    -   Launch targeted reactiviation campaigns, such as limited discount codes or personalized product recommendations.
+
+    -    Encourage cross-selling or add-on bundles to increase order value.
+
+    -    Monitor for signs of churn and intervene in an early stage
+
+-   **Cluster 2: At-Risk or Lost Customers**
+
+    -    Activate a win-back campaign, but realize that ROI might be low.
+
+    -    Limit marketing budget spend on this group and prioritize high-potential segments.
+
+    -    Start a survey campaign to understand why customer disengage.
+
+-   **Cluster 3: High-Value Loyal Customers**
+
+    -    Focus on reteantion strategies such as loyalty programs and exclusive early access to new products.
+
+    -    Promote referrals and reviews, this group has potential to influence others.
+
+    -    Offer more value-added services to increase satisfaction and retention.
+
+## Summary
+
+The analysis highlights clear differences between clusters. While Clusters 1 and 2 require strategies to reduce churn and re-engage customers, Cluster 3 represents the backbone of the business and should be nurtured with retention-focused initiatives. This segmentation provides a foundation for **personalized marketing strategies** that can optimize resource allocation and improve overall customer lifetime value.
